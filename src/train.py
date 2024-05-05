@@ -1,58 +1,114 @@
-import gymnasium
+import gymnasium as gym
 import os
 import random
 import string
 import argparse
 
-from PyFlyt.gym_envs import FlattenWaypointEnv
-from stable_baselines3.common.env_util import make_vec_env
+import torch
 
-from stable_baselines3 import PPO, A2C, DDPG, TD3, SAC
+from obstacle_env import QuadXObstacleEnv
+from PyFlyt.gym_envs import FlattenWaypointEnv
+
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3 import PPO
+
+def make_env(environment_id, log_dir):
+    def _thunk():
+        if environment_id=="QuadX-Hover-v1":
+            env = gym.make(f"PyFlyt/{environment_id}")
+        elif environment_id=="QuadX-Wapoints-1":
+            env = gym.make(f"PyFlyt/{environment_id}")
+            env = FlattenWaypointEnv(env, context_lenght=1)
+        elif environment_id=="QuadX-Obstacles-1":
+            env = QuadXObstacleEnv()
+        else:
+            raise "Uncompatible environment"
+        env = gym.wrappers.NormalizeObservation(env)
+        env = Monitor(env, log_dir)
+        return env
+    return _thunk
 
 def train(args):
     environment = args['environment']
-
-    if args['algorithm'] == "PPO": algorithm = PPO
-    elif args['algorithm'] == "A2C": algorithm = A2C
-    elif args['algorithm'] == "DDPG": algorithm = DDPG
-    elif args['algorithm'] == "TD3": algorithm = TD3
-    elif args['algorithm'] == "SAC": algorithm = SAC
-    else:
-        print("Error: Invalid DRL Algorithm specified")
-        return
-
     id = ''.join(random.choices(string.ascii_letters, k=20))
+    full_id = "PPO_" + '_' + environment + '_' + id
 
-    full_id = args['algorithm'] + '_' + environment + '_' + id
-
-    models_dir = f"models/{full_id}"
-    logdir = "data"
+    models_dir = f"models/{full_id}/"
+    logdir = models_dir + "data"
+    checkpoint_dir = models_dir + "checkpoints/"
 
     if not os.path.exists(models_dir):
         os.makedirs(models_dir)
     if not os.path.exists(logdir):
         os.makedirs(logdir)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
 
-    train_env = make_vec_env(lambda: FlattenWaypointEnv(gymnasium.make(f"PyFlyt/{environment}"), context_length=1), n_envs=1)
+    
+    train_env = make_vec_env(
+        make_env(
+            environment_id=environment, 
+            log_dir=logdir if args["log"]else None), 
+        n_envs=1)
 
-    model = algorithm("MlpPolicy", train_env, verbose=1, tensorboard_log=logdir if args["log"] else None)
+    checkpoint_callback = CheckpointCallback(
+        save_freq=1000000,
+        save_path=checkpoint_dir,
+        name_prefix="PPO_" + environment
+    )
 
-    for i in range(1, args['num_iters']):
-        model.learn(total_timesteps=args['steps_per_iter'], reset_num_timesteps=False, tb_log_name=full_id)
-        if args["log"]:
-            model.save(f"{models_dir}/{args['steps_per_iter']*i}")
-            with open('recent_model.txt', 'w') as file:
-                file.write(f"{models_dir}/{args['steps_per_iter']*i}")
+    if args["sde"]:
+        policy_kwargs = dict(
+            log_std_init=-2,
+            ortho_init=False,
+            activation_fn=torch.nn.ReLU,
+            net_arch=dict(pi=[256,256], vf=[256,256])
+        )
+        model = PPO(
+            policy="MlpPolicy", 
+            env=train_env,
+            batch_size=128,
+            n_steps=512,
+            gamma=0.99,
+            gae_lambda=0.9,
+            ent_coef=0.0,
+            sde_sample_freq=4,
+            max_grad_norm=0.5,
+            vf_coef=0.5,
+            learning_rate=3e-5,
+            use_sde=True,
+            clip_range=0.4,
+            policy_kwargs=policy_kwargs, 
+            verbose=1, 
+            tensorboard_log=logdir if args["log"] else None)
+    else:
+        model = PPO(
+            policy="MlpPolicy", 
+            env=train_env, 
+            verbose=1, 
+            tensorboard_log=logdir if args["log"] else None)
+
+    try:
+        model.learn(total_timesteps=args["total_timesteps"],
+                    callback=checkpoint_callback,
+                    tb_log_name="tensorboard")
+    except KeyboardInterrupt:
+        model_name = f"{checkpoint_dir}/{model.num_timesteps}"
+        model.save(model_name)
+        with open('recent_model.txt', 'w') as file:
+            file.write(model_name)
+     
     train_env.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train an agent in an environment using a DRL algorithm from stable baselines 3')
 
+    parser.add_argument('--sde', type=bool, default=False, help='uses sde')
     parser.add_argument('--log', type=bool, default=True, help='record logs to tensorboard')
-    parser.add_argument('--algorithm', '-a', type=str, default="PPO", help='which DRL algorithm to use for training')
-    parser.add_argument('--environment', '-env', type=str, default="QuadX-Waypoints-v1", help='which environment to train on')
-    parser.add_argument('--steps_per_iter', '-spi', type=int, default=10000, help='the number of timesteps for each saved model')
-    parser.add_argument('--num_iters', '-ni', type=int, default=100, help='the number of iterations')
+    parser.add_argument('--environment', '-env', type=str, default="QuadX-Hover-v1", help='which environment to train on')
+    parser.add_argument('--total_timesteps', '-tim', type=int, default=2000000, help='training duration')
     args = parser.parse_args()
 
     train(vars(args))

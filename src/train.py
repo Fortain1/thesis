@@ -18,10 +18,10 @@ def make_env(environment_id, log_dir):
     def _thunk():
         if environment_id=="QuadX-Hover-v1":
             env = gym.make(f"PyFlyt/{environment_id}")
-        elif environment_id=="QuadX-Wapoints-1":
+        elif environment_id=="QuadX-Waypoints-v1":
             env = gym.make(f"PyFlyt/{environment_id}")
-            env = FlattenWaypointEnv(env, context_lenght=1)
-        elif environment_id=="QuadX-Obstacles-1":
+            env = FlattenWaypointEnv(env, context_length=1)
+        elif environment_id=="QuadX-Obstacles-v1":
             env = QuadXObstacleEnv()
         else:
             raise "Uncompatible environment"
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--sde', type=bool, default=False, help='uses sde')
     parser.add_argument('--log', type=bool, default=True, help='record logs to tensorboard')
-    parser.add_argument('--environment', '-env', type=str, default="QuadX-Hover-v1", help='which environment to train on')
+    parser.add_argument('--environment', '-env', type=str, default="QuadX-Obstacles-v1", help='which environment to train on')
     parser.add_argument('--total_timesteps', '-tim', type=int, default=2000000, help='training duration')
     args = parser.parse_args()
 

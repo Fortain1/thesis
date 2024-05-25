@@ -20,6 +20,8 @@ class ObjectHandler:
         goal_reach_angle: float,
         flight_dome_size: float,
         np_random: np.random.Generator,
+        obstacle_positions = None,
+        waypoint_positions = None
     ):
         """__init__.
 
@@ -40,7 +42,8 @@ class ObjectHandler:
         self.goal_reach_angle = goal_reach_angle
         self.flight_dome_size = flight_dome_size
         self.np_random = np_random
-
+        self.obstacle_positions = obstacle_positions
+        self.waypoint_positions = waypoint_positions
         # the target visual
         file_dir = os.path.dirname(os.path.realpath(__file__))
         self.targ_obj_dir = os.path.join(file_dir, "assets\\target.urdf")
@@ -62,40 +65,45 @@ class ObjectHandler:
         # reset the error
         self.new_distance = 0.0
         self.old_distance = 0.0
-
-        # we sample from polar coordinates to generate linear targets
-        self.targets = np.zeros(shape=(self.num_targets, 3))
-        thetas = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
-        phis = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
-        for i, theta, phi in zip(range(self.num_targets), thetas, phis):
-            dist = self.np_random.uniform(low=1.0, high=self.flight_dome_size * 0.9)
-            x = dist * math.sin(phi) * math.cos(theta)
-            y = dist * math.sin(phi) * math.sin(theta)
-            z = abs(dist * math.cos(phi))
-
-            # check for floor of z
-            self.targets[i] = np.array([x, y, z if z > 0.1 else 0.1])
-
-        # we sample from polar coordinates to generate linear targets
-        self.obstacles = np.zeros(shape=(self.num_targets, 3))
-        thetas = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
-        phis = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
-        for i, theta, phi in zip(range(self.num_targets), thetas, phis):
-            dist = self.np_random.uniform(low=1.0, high=self.flight_dome_size * 0.9)
-            x = dist * math.sin(phi) * math.cos(theta)
-            y = dist * math.sin(phi) * math.sin(theta)
-            z = abs(dist * math.cos(phi))
-
-            # check for floor of z
-            while any(np.linalg.norm(self.targets - [x, y, z], axis=1) < 0.3):
-
+        if self.waypoint_positions:
+            self.targets = self.waypoint_positions
+        else:
+            # we sample from polar coordinates to generate linear targets
+            self.targets = np.zeros(shape=(self.num_targets, 3))
+            thetas = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
+            phis = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
+            for i, theta, phi in zip(range(self.num_targets), thetas, phis):
                 dist = self.np_random.uniform(low=1.0, high=self.flight_dome_size * 0.9)
                 x = dist * math.sin(phi) * math.cos(theta)
                 y = dist * math.sin(phi) * math.sin(theta)
                 z = abs(dist * math.cos(phi))
-                  
-            
-            self.obstacles[i] = np.array([x, y, z if z > 0.1 else 0.1])
+
+                # check for floor of z
+                self.targets[i] = np.array([x, y, z if z > 0.1 else 0.1])
+
+        if self.obstacle_positions:
+            self.obstacles = self.obstacle_positions
+        else:
+        # we sample from polar coordinates to generate linear targets
+            self.obstacles = np.zeros(shape=(self.num_targets, 3))
+            thetas = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
+            phis = self.np_random.uniform(0.0, 2.0 * math.pi, size=(self.num_targets,))
+            for i, theta, phi in zip(range(self.num_targets), thetas, phis):
+                dist = self.np_random.uniform(low=1.0, high=self.flight_dome_size * 0.9)
+                x = dist * math.sin(phi) * math.cos(theta)
+                y = dist * math.sin(phi) * math.sin(theta)
+                z = abs(dist * math.cos(phi))
+
+                # check for floor of z
+                while any(np.linalg.norm(self.targets - [x, y, z], axis=1) < 0.3):
+
+                    dist = self.np_random.uniform(low=1.0, high=self.flight_dome_size * 0.9)
+                    x = dist * math.sin(phi) * math.cos(theta)
+                    y = dist * math.sin(phi) * math.sin(theta)
+                    z = abs(dist * math.cos(phi))
+                    
+                
+                self.obstacles[i] = np.array([x, y, z if z > 0.1 else 0.1])
 
         # yaw targets
         if self.use_yaw_targets:

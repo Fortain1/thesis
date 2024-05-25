@@ -44,6 +44,8 @@ class QuadXObstacleEnv(QuadXBaseEnv):
         agent_hz: int = 30,
         render_mode: None | str = None,
         render_resolution: tuple[int, int] = (480, 480),
+        obstacle_positions = None,
+        waypoint_positions = None
     ):
         """__init__.
 
@@ -80,6 +82,8 @@ class QuadXObstacleEnv(QuadXBaseEnv):
             goal_reach_angle=goal_reach_angle,
             flight_dome_size=flight_dome_size,
             np_random=self.np_random,
+            waypoint_positions=waypoint_positions,
+            obstacle_positions=obstacle_positions
         )
 
         # Define observation space
